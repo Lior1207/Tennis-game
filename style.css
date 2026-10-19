@@ -87,7 +87,6 @@ html, body {
 
 #bubble {
   position: absolute;
-  max-width: 70%;
   background: #fff;
   color: #111;
   border: 2px solid #111;
@@ -95,7 +94,9 @@ html, body {
   padding: 3px 7px;
   font-weight: 800;
   font-size: 14px;
-  white-space: nowrap;
+  width: max-content;
+  max-width: 52%;
+  text-align: center;
   z-index: 3;
   pointer-events: none;
   box-shadow: 2px 2px 0 #111;

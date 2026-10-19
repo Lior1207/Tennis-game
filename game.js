@@ -6,6 +6,7 @@
   const COURT = { x0: 35, x1: 125, y0: 30, y1: 210 };
   const G = 0.025, NET_H = 6, BOUNCE = 0.7, FRICTION = 0.82;
   const GAMES_TO_WIN = 3;
+  const MAX_STRIKES = 3; // training vs Tal ends after 3 misses
   const WARMUP_GOAL = 10;
   const REACH_X = 14, REACH_Y = 10, REACH_Z = 22;
   const POINT_LABELS = ['0', '15', '30', '40'];
@@ -16,10 +17,12 @@
       desc: 'המאמנת · הרמה הכי גבוהה',
       speed: 1.45, shot: 3.0, err: 0.03, delay: 5,
       hair: '#5a3418', shirt: '#d83a3a', bottom: '#f2f2f2', ponytail: true, visor: null,
-      // Tal coaches her opponent, so the phrasing follows the opponent's gender
+      // Tal coaches her opponent: coachM goes to Zion, coachF to Lior
       lines: {
-        coach: ['יותר מהאגן', 'תבוא לכדור מלמטה', 'היית מגיע לזה'],
-        coachF: ['יותר מהאגן', 'תבואי לכדור מלמטה', 'היית מגיעה לזה'],
+        coach: ['יותר מהאגן', 'להרים את הכדור', 'לעשות תנועה מלאה', 'תמרים מעולים',
+          'לא יכולה אני בלימודים', 'צריכה לבדוק אם יש מגרש'],
+        coachM: ['תבוא לכדור מלמטה', 'היית מגיע לזה', 'עזוב', 'אל תגזים עם הברך'],
+        coachF: ['תבואי לכדור מלמטה', 'היית מגיעה לזה', 'תחשבי שאני האוזנייה', 'תני לכדור עוד רגע'],
       },
     },
     zion: {
@@ -27,14 +30,23 @@
       desc: 'שחקן טוב בינוני',
       speed: 1.3, shot: 2.6, err: 0.1, delay: 12, trainCap: 123,
       hair: '#111111', shirt: '#2f6fd8', bottom: '#1c2a5a', ponytail: false, visor: null,
-      lines: { lose: ['איזה אפס', 'אייי קרעתי את הברך'], win: ['ממש אלקרז', 'חייבת לי קפה'] },
+      lines: {
+        lose: ['איזה אפס', 'אייי קרעתי את הברך', 'איזה אפס אני לא מאמין'],
+        win: ['ממש אלקרז', 'חייבת לי קפה'],
+        chat: ['הפיזיותרפיסט לא מרשה', 'עשיתי אימון כוח השבוע', 'הערב טונה היה הטוב בחיי', 'פעם במוסד', 'מקס בונד מקס'],
+      },
     },
     lior: {
       id: 'lior', name: 'ליאור', female: true, rank: 2,
       desc: 'שחקנית בינונית · עם מצחייה',
       speed: 1.25, shot: 2.45, err: 0.09, delay: 12, trainCap: 100,
       hair: '#c8903c', shirt: '#9b59d0', bottom: '#2a2a2a', ponytail: true, visor: '#ff6fb1',
-      lines: { lose: ['סעמק', 'אמאשך', 'המחבט שבור היום'], win: ['מי זאת?!', 'ראית איך רצתי לכדור??'] },
+      lines: {
+        lose: ['סעמק', 'אמאשך', 'המחבט שבור היום'],
+        win: ['מי זאת?!', 'ראית איך רצתי לכדור??'],
+        chat: ['מתי טסים לרולנד גרוס', 'איזה כיף באוסטרליה', 'ניו זילנד מהממת', 'הסושי ביפן מושלם', 'אני במסאז תאילנדי'],
+        chatM: ['תמכור את מאנדיי', 'אתה מגזים', 'חי בסרט', 'קפה עליך'], // only when talking to Zion
+      },
     },
   };
 
@@ -256,7 +268,7 @@
       ball: mkBall(),
       pts: [0, 0], games: [0, 0], server: 0,
       state: 'serve', timer: 0, rally: 0, count: 0,
-      cap: you.trainCap || 999, best: loadBest(youId),
+      cap: you.trainCap || 999, strikes: 0, best: loadBest(youId),
       paused: false, over: false,
     };
     if (mode === 'match') {
@@ -513,10 +525,15 @@
 
     if (g.mode === 'train') {
       if (winner === 1) {
-        g.trainOver = true;
+        g.strikes++;
         g.timer = 120;
-        if (g.count > g.best) { g.best = g.count; saveBest(g.you.id, g.best); g.newBest = true; }
-        showMsg(reason, `רצף: ${g.count}`);
+        if (g.strikes >= MAX_STRIKES || g.count >= g.cap) {
+          g.trainOver = true;
+          if (g.count > g.best) { g.best = g.count; saveBest(g.you.id, g.best); g.newBest = true; }
+          showMsg(reason, `נקודות: ${g.count}`);
+        } else {
+          showMsg(reason, `פסילה ${g.strikes} מתוך ${MAX_STRIKES}`);
+        }
         sfx.bad();
         say(1, lineFor(CHARS.tal, 'win', g.you), 2600);
       } else {
@@ -551,13 +568,18 @@
       if (wp.ch.id === 'tal') say(winner, lineFor(wp.ch, 'win', lp.ch));
       else if (lp.ch.id !== 'tal' && Math.random() < 0.6) say(1 - winner, lineFor(lp.ch, 'lose'));
       else if (wp.ch.lines.win) say(winner, lineFor(wp.ch, 'win'));
+    } else if (Math.random() < 0.3) {
+      const chatty = g.players.filter(p => p.ch.lines.chat);
+      if (chatty.length) { const p = pick(chatty); say(p.side, lineFor(p.ch, 'chat', g.players[1 - p.side].ch)); }
     }
     renderHud();
   }
 
   function lineFor(ch, kind, to) {
-    if (ch.lines.coach) return pick(to && to.female ? ch.lines.coachF : ch.lines.coach);
-    return pick(ch.lines[kind]);
+    const L = ch.lines;
+    if (L.coach) return pick(L.coach.concat(to && to.female ? L.coachF : L.coachM));
+    if (kind === 'chat') return pick(L.chat.concat(to && !to.female && L.chatM ? L.chatM : []));
+    return pick(L[kind]);
   }
 
   function afterPoint() {
@@ -621,6 +643,10 @@
               if (g.mode === 'train' && b.hitter === 0) { g.count++; sfx.count(); renderHud(); }
               if (g.mode === 'warmup') {
                 g.count++; sfx.count(); renderHud();
+                if (g.count % 3 === 0 && g.count < WARMUP_GOAL && Math.random() < 0.6) {
+                  const p = pick(g.players);
+                  say(p.side, lineFor(p.ch, 'chat', g.players[1 - p.side].ch));
+                }
                 if (g.count >= WARMUP_GOAL) {
                   // Done: let the ball die and head for iced coffee
                   g.coffee = true;
@@ -777,7 +803,7 @@
   // ---------- HUD / messages ----------
   function renderHud() {
     const g = game;
-    if (!g) { hud.innerHTML = '<div class="center">טניס פיקסל · משחק יחידים</div>'; return; }
+    if (!g) { hud.innerHTML = '<div class="center">טניס עם הקפטנית</div>'; return; }
     if (g.mode === 'warmup') {
       hud.innerHTML = `<div class="row"><span class="nm">חימום: ציון וליאור</span></div>
         <div class="row"><span class="nm">מסירות: ${g.count} / ${WARMUP_GOAL}</span></div>`;
@@ -785,7 +811,8 @@
     }
     if (g.mode === 'train') {
       hud.innerHTML = `<div class="row"><span class="nm">אימון: ${g.you.name} מול טל</span></div>
-        <div class="row"><span class="nm">רצף: ${g.count}</span><span class="gm">שיא: ${g.best}</span></div>`;
+        <div class="row"><span class="nm">נקודות: ${g.count}</span>
+        <span class="gm">פסילות: ${'✖'.repeat(g.strikes)}${'○'.repeat(MAX_STRIKES - g.strikes)} · שיא: ${g.best}</span></div>`;
       return;
     }
     const [a, o] = g.pts;
@@ -841,7 +868,7 @@
     game = null;
     bubble.hidden = true; hideMsg();
     renderHud();
-    showOverlay(`<h1>טניס<br>פיקסל</h1><div class="sub">משחק יחידים</div>
+    showOverlay(`<h1>טניס עם<br>הקפטנית</h1><div class="sub">משחק יחידים</div>
       <button data-act="warmup">חימום: ציון וליאור</button>
       <button data-act="train">אימון מול טל</button>
       <button data-act="match">משחק אמיתי</button>
@@ -860,6 +887,8 @@
     renderHud();
     hud.innerHTML = '<div class="center">הפסקת קפה קר ☕</div>';
     showOverlay(`<div class="quote"><b>ציון:</b> חייבת לי קפה</div>
+      <div class="quote"><b>ליאור:</b> ${lineFor(CHARS.lior, 'chat', CHARS.zion)}</div>
+      <div class="quote"><b>טל:</b> ${pick(['לא יכולה אני בלימודים', 'צריכה לבדוק אם יש מגרש', 'תמרים מעולים'])}</div>
       <p><b>${WARMUP_GOAL} מסירות!</b> ציון, ליאור וטל יושבים לקפה קר.</p>
       <button data-act="again">עוד חימום</button>
       <button class="ghost" data-act="title">תפריט</button>`, 'scene');
@@ -868,7 +897,7 @@
   function showTrainPick() {
     showOverlay(`<h2>אימון מול טל</h2><p>מי מתאמן/ת היום?</p>
       ${card('zion', 'train-go')}${card('lior', 'train-go')}
-      <p class="small">כל כדור שנוחת אצל טל = נקודה ברצף</p>
+      <p class="small">כל כדור שנוחת אצל טל = נקודה. ${MAX_STRIKES} פסילות והאימון נגמר.</p>
       <button class="ghost" data-act="title">חזרה</button>`);
   }
 
@@ -890,11 +919,11 @@
   function showTrainResult() {
     const g = game;
     const capHit = g.count >= g.cap;
-    showOverlay(`<h2>סוף סבב</h2>
+    showOverlay(`<h2>סוף האימון</h2>
       <div class="big">${g.count}</div>
       <p>${capHit ? 'זה המקסימום שלך מול טל!' : g.newBest ? 'שיא חדש!' : `השיא שלך: ${g.best}`}</p>
       <div class="quote"><b>טל:</b> ${lineFor(CHARS.tal, 'win', g.you)}</div>
-      <button data-act="again">עוד סבב</button>
+      <button data-act="again">עוד אימון</button>
       <button class="ghost" data-act="title">תפריט</button>`);
   }
 
