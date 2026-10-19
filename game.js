@@ -143,6 +143,79 @@
   }
   const portrait = id => SPRITES[id].front[0].toDataURL();
 
+  // Cheering fans that pop up beside the court in training (frame 0 = arms down, 1 = cheering)
+  const ANIMALS = {
+    kangaroo: {
+      name: 'קנגורו',
+      pal: { B: '#b0703a', D: '#6e4220', L: '#e8c08a', K: '#1a1a1a' },
+      rows: [
+        '..D......D..',
+        '..DB....BD..',
+        '..BB....BB..',
+        '...BBBBBB...',
+        '..BBKBBKBB..',
+        '..BBBBBBBB..',
+        '...BBDDBB...',
+        '....BBBB....',
+        '...BBBBBB...',
+        '..BBBLLBBB..',
+        '..B.BLLB.B..',
+        '....BLLB....',
+        '...BB..BB...',
+        '..DDD..DDD..',
+      ],
+      cheer: { 7: '.B..BBBB..B.', 8: '.B.BBBBBB.B.', 9: '...BBLLBB...', 10: '....BLLB....' },
+    },
+    koala: {
+      name: 'קואלה',
+      pal: { G: '#8f9499', L: '#d8dcdf', N: '#2a2a2a', K: '#111111' },
+      rows: [
+        '............',
+        '.GG......GG.',
+        'GLLG....GLLG',
+        'GLLGGGGGGLLG',
+        '.GGGGGGGGGG.',
+        '..GKGGGGKG..',
+        '..GGGNNGGG..',
+        '..GGGNNGGG..',
+        '...GGGGGG...',
+        '..GGLLLLGG..',
+        '.GG.LLLL.GG.',
+        '...GLLLLG...',
+        '...GG..GG...',
+        '..GGG..GGG..',
+      ],
+      cheer: { 8: 'G..GGGGGG..G', 9: 'GG.GLLLLG.GG', 10: '...GLLLLG...' },
+    },
+    kiwi: {
+      name: 'קיווי',
+      pal: { B: '#8a6236', D: '#5e4022', Y: '#e8d27a', K: '#111111' },
+      rows: [
+        '............',
+        '............',
+        '............',
+        '.....BBBB...',
+        '....BBBBBB..',
+        '...BKBBBBBB.',
+        'YYYBBBDBBBBB',
+        '...BBBBDBBBB',
+        '....BBBBDBB.',
+        '.....BBBBB..',
+        '......Y.Y...',
+        '......Y.Y...',
+        '.....YY.YY..',
+        '............',
+      ],
+      cheer: { 6: 'YYYBBBDBBBBB', 10: '.....Y...Y..', 11: '....Y.....Y.', 12: '............' },
+    },
+  };
+  for (const k in ANIMALS) {
+    const a = ANIMALS[k];
+    const up = a.rows.map((r, i) => a.cheer[i] || r);
+    a.frames = [rowsToCanvas(a.rows, a.pal), rowsToCanvas(up, a.pal)];
+  }
+  const CHEERS = ['יששש!', 'כל הכבוד!', 'וואו!', 'עוד ככה!'];
+
   // ---------- Audio ----------
   let actx = null, soundOn = true;
   try { soundOn = localStorage.getItem('tennis-sound') !== 'off'; } catch (e) { /* ignore */ }
@@ -591,6 +664,18 @@
     setupServe();
   }
 
+  function spawnAnimal() {
+    const g = game;
+    const kinds = Object.keys(ANIMALS).filter(k => !g.animal || k !== g.lastAnimal);
+    const kind = pick(kinds);
+    const left = Math.random() < 0.5;
+    const x = left ? 12 : W - 12, y = rand(70, 190);
+    g.animal = { kind, x, y, t: 0, life: 200 };
+    g.lastAnimal = kind;
+    sfx.good();
+    sayAt(ANIMALS[kind].name, `${pick(CHEERS)} ${g.count} נקודות!`, x, y - 34, false, 2600);
+  }
+
   // ---------- Update ----------
   function update() {
     const g = game, b = g.ball;
@@ -640,7 +725,10 @@
             else if (!inCourt(b.x, b.y)) endPoint(1 - b.hitter, 'אאוט!');
             else {
               b.bounces = 1;
-              if (g.mode === 'train' && b.hitter === 0) { g.count++; sfx.count(); renderHud(); }
+              if (g.mode === 'train' && b.hitter === 0) {
+                g.count++; sfx.count(); renderHud();
+                if (g.count % 10 === 0) spawnAnimal();
+              }
               if (g.mode === 'warmup') {
                 g.count++; sfx.count(); renderHud();
                 if (g.count % 3 === 0 && g.count < WARMUP_GOAL && Math.random() < 0.6) {
@@ -675,6 +763,7 @@
       }
     }
     for (const p of g.players) if (p.swing > 0) p.swing--;
+    if (g.animal && ++g.animal.t > g.animal.life) g.animal = null;
   }
 
   // ---------- Rendering ----------
@@ -745,10 +834,12 @@
   // Zion, Tal and Lior sitting at a café table with iced coffees
   function drawCoffee(t) {
     rect(0, 0, W, H, '#9fd8f0');
-    rect(0, 150, W, H - 150, '#3f8f4c');
-    for (let y = 154; y < H; y += 8) rect(0, y, W, 4, '#3a8546');
+    rect(0, 132, W, H - 132, '#3f8f4c');
+    for (let y = 136; y < H; y += 8) rect(0, y, W, 4, '#3a8546');
+    ctx.save();
+    ctx.translate(0, -18); // keep the picture above the text panel
     // sun
-    rect(126, 14, 14, 14, '#ffe066'); rect(124, 17, 18, 8, '#ffe066'); rect(129, 12, 8, 18, '#ffe066');
+    rect(126, 30, 14, 14, '#ffe066'); rect(124, 33, 18, 8, '#ffe066'); rect(129, 28, 8, 18, '#ffe066');
     // court fence in the distance
     for (let x = 0; x < W; x += 6) rect(x, 120, 1, 30, '#5b6b5b');
     rect(0, 120, W, 1, '#5b6b5b'); rect(0, 135, W, 1, '#5b6b5b');
@@ -782,12 +873,35 @@
       rect(cx + 1, 119 + ice, 2, 2, '#ffffff'); rect(cx + 4, 121 - ice, 2, 2, '#f0faff');
       rect(cx + 5, 106, 1, 9, '#ff6fb1'); rect(cx + 5, 106, 3, 1, '#ff6fb1');
     });
+    ctx.restore();
+  }
+
+  function drawAnimal(a) {
+    const A = ANIMALS[a.kind];
+    const cheering = Math.floor(a.t / 10) % 2 === 1;
+    const hop = Math.round(Math.abs(Math.sin(a.t / 10 * Math.PI / 2)) * (a.kind === 'kangaroo' ? 8 : 4));
+    const pop = a.t < 12 ? Math.round((12 - a.t) * 2.4) : 0; // springs up out of the ground
+    const x = Math.round(a.x - 12), y = Math.round(a.y - 28 - hop + pop); // drawn at 2x
+    rect(x + 4, Math.round(a.y) - 1, 16, 2, COL.shadow);
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, 0, W, Math.round(a.y) + 1); ctx.clip();
+    if (a.x > CX) { ctx.translate(x * 2 + 24, 0); ctx.scale(-1, 1); }
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(A.frames[cheering ? 1 : 0], x, y, 24, 28);
+    ctx.restore();
+    // confetti
+    const colors = ['#ff6fb1', '#f1f74a', '#ffffff', '#5ad1ff'];
+    for (let i = 0; i < 8; i++) {
+      const ct = (a.t * 0.6 + i * 13) % 40;
+      rect(Math.round(a.x - 12 + ((i * 7) % 25)), Math.round(a.y - 44 + ct), 2, 2, colors[i % 4]);
+    }
   }
 
   function render() {
     if (game && game.mode === 'warmup' && game.coffeeScene) { drawCoffee(performance.now()); return; }
     drawCourt();
     if (!game) { drawNet(); return; }
+    if (game.animal) drawAnimal(game.animal);
     const items = game.players.map(p => ({ y: p.y, draw: () => drawPlayer(p) }));
     const b = game.ball;
     items.push({ y: b.y + 0.1, draw: () => drawBall(b) });
@@ -811,7 +925,7 @@
     }
     if (g.mode === 'train') {
       hud.innerHTML = `<div class="row"><span class="nm">אימון: ${g.you.name} מול טל</span></div>
-        <div class="row"><span class="nm">נקודות: ${g.count}</span>
+        <div class="row"><span class="nm">נקודות: ${g.count} / ${g.cap}</span>
         <span class="gm">פסילות: ${'✖'.repeat(g.strikes)}${'○'.repeat(MAX_STRIKES - g.strikes)} · שיא: ${g.best}</span></div>`;
       return;
     }
@@ -823,7 +937,7 @@
     };
     hud.innerHTML = [1, 0].map(i => `<div class="row${g.state === 'serve' && g.serverSide === i ? ' serving' : ''}">
       <span class="nm">${g.players[i].ch.name}${i === 0 ? (g.you.female ? ' (את)' : ' (אתה)') : ''}</span>
-      <span class="gm">משחקונים ${g.games[i]}</span><span class="pt">${lbl(i)}</span></div>`).join('');
+      <span class="gm">משחקונים ${g.games[i]}/${GAMES_TO_WIN}</span><span class="pt">${lbl(i)}</span></div>`).join('');
   }
 
   let msgTimer = 0;
@@ -837,10 +951,14 @@
   let bubbleTimer = 0;
   function say(side, text, ms = 2200) {
     const p = game.players[side];
-    bubble.innerHTML = `<b>${p.ch.name}:</b> ${text}`;
-    bubble.style.left = clamp(p.x / W * 100, 26, 74) + '%';
-    if (p.side === 1) { bubble.style.top = ((p.y + 3) / H * 100) + '%'; bubble.className = 'below'; }
-    else { bubble.style.top = ((p.y - 20) / H * 100) + '%'; bubble.className = 'above'; }
+    if (p.side === 1) sayAt(p.ch.name, text, p.x, p.y + 3, true, ms);
+    else sayAt(p.ch.name, text, p.x, p.y - 20, false, ms);
+  }
+  function sayAt(name, text, x, y, below, ms = 2200) {
+    bubble.innerHTML = `<b>${name}:</b> ${text}`;
+    bubble.style.left = clamp(x / W * 100, 26, 74) + '%';
+    bubble.style.top = (y / H * 100) + '%';
+    bubble.className = below ? 'below' : 'above';
     bubble.hidden = false;
     clearTimeout(bubbleTimer);
     bubbleTimer = setTimeout(() => { bubble.hidden = true; }, ms);
@@ -884,14 +1002,14 @@
   function showCoffee() {
     const g = game;
     g.coffeeScene = true;
+    bubble.hidden = true;
     renderHud();
-    hud.innerHTML = '<div class="center">הפסקת קפה קר ☕</div>';
+    hud.innerHTML = `<div class="center">${WARMUP_GOAL} מסירות! הפסקת קפה קר ☕</div>`;
     showOverlay(`<div class="quote"><b>ציון:</b> חייבת לי קפה</div>
       <div class="quote"><b>ליאור:</b> ${lineFor(CHARS.lior, 'chat', CHARS.zion)}</div>
       <div class="quote"><b>טל:</b> ${pick(['לא יכולה אני בלימודים', 'צריכה לבדוק אם יש מגרש', 'תמרים מעולים'])}</div>
-      <p><b>${WARMUP_GOAL} מסירות!</b> ציון, ליאור וטל יושבים לקפה קר.</p>
-      <button data-act="again">עוד חימום</button>
-      <button class="ghost" data-act="title">תפריט</button>`, 'scene');
+      <div class="btns"><button data-act="again">עוד חימום</button>
+      <button class="ghost" data-act="title">תפריט</button></div>`, 'scene');
   }
 
   function showTrainPick() {

@@ -134,7 +134,10 @@ html, body {
 }
 #overlay.show { display: flex; }
 #overlay.scene { background: transparent; align-items: flex-end; }
-#overlay.scene .menu { margin: 0; background: var(--lcd-3); border-top: 3px solid var(--lcd-0); }
+#overlay.scene .menu { margin: 0; padding: 8px 10px; gap: 5px; background: var(--lcd-3); border-top: 3px solid var(--lcd-0); }
+#overlay.scene .quote { font-size: 13px; padding: 2px 8px; }
+#overlay.scene .btns { display: flex; gap: 8px; margin-top: 2px; }
+#overlay.scene .btns button { flex: 1; padding: 7px; font-size: 15px; }
 
 .menu {
   margin: auto;
