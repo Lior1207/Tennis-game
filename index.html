@@ -12,31 +12,19 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div id="console">
-  <div id="bezel">
-    <div id="lcd">
-      <div id="hud"></div>
-      <div id="stage">
-        <canvas id="c" width="160" height="240"></canvas>
-        <div id="bubble" hidden></div>
-        <div id="msg" hidden></div>
-        <div id="overlay"></div>
-      </div>
-    </div>
+<div id="app">
+  <div id="top">
+    <div id="hud"></div>
+    <button id="btnSound" type="button" aria-label="צליל"></button>
+    <button id="btnPause" type="button" aria-label="הפסקה">❚❚</button>
   </div>
-  <div id="brand">PIXEL <i>TENNIS</i></div>
-  <div id="controls">
-    <div id="stick" aria-label="כיוונים">
-      <div class="arm h"></div><div class="arm v"></div>
-      <div class="dir up"></div><div class="dir down"></div><div class="dir left"></div><div class="dir right"></div>
-    </div>
-    <div id="sys">
-      <button id="btnMenu" type="button">MENU</button>
-      <button id="btnSound" type="button">SOUND</button>
-    </div>
-    <div id="awrap"><button id="btnA" type="button">A</button><span>הכה</span></div>
+  <div id="stage">
+    <canvas id="c" width="160" height="240"></canvas>
+    <div id="bubble" hidden></div>
+    <div id="msg" hidden></div>
+    <div id="tip" hidden>נגיעה במסך להגשה</div>
+    <div id="overlay"></div>
   </div>
-  <p id="hint">מקלדת: חצים / WASD לזוז · רווח להכות ולהגיש · כיוון בזמן המכה קובע לאן הכדור הולך</p>
 </div>
 <script src="game.js"></script>
 </body>

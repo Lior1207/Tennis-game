@@ -15,7 +15,11 @@
       desc: 'המאמנת · הרמה הכי גבוהה',
       speed: 1.45, shot: 3.0, err: 0.03, delay: 5,
       hair: '#5a3418', shirt: '#d83a3a', bottom: '#f2f2f2', ponytail: true, visor: null,
-      lines: { coach: ['יותר מהאגן', 'תבוא לכדור מלמטה', 'היית מגיע לזה'] },
+      // Tal coaches her opponent, so the phrasing follows the opponent's gender
+      lines: {
+        coach: ['יותר מהאגן', 'תבוא לכדור מלמטה', 'היית מגיע לזה'],
+        coachF: ['יותר מהאגן', 'תבואי לכדור מלמטה', 'היית מגיעה לזה'],
+      },
     },
     zion: {
       id: 'zion', name: 'ציון', female: false, rank: 1,
@@ -164,23 +168,18 @@
   const bubble = document.getElementById('bubble');
   const msgEl = document.getElementById('msg');
   const overlay = document.getElementById('overlay');
-  const stickEl = document.getElementById('stick');
-  const btnA = document.getElementById('btnA');
+  const tipEl = document.getElementById('tip');
   const btnSound = document.getElementById('btnSound');
 
   // ---------- Input ----------
+  // Touch / mouse: hold and drag on the court, your player runs to your finger.
+  // Keyboard: arrows / WASD. Hitting is automatic; tap (or Space) to serve.
   const keys = new Set();
-  const input = { mx: 0, my: 0, a: false, stickX: 0, stickY: 0 };
+  const input = { mx: 0, my: 0, a: false, touch: null };
 
   function updateDirs() {
-    let kx = (keys.has('ArrowRight') || keys.has('KeyD') ? 1 : 0) - (keys.has('ArrowLeft') || keys.has('KeyA') ? 1 : 0);
-    let ky = (keys.has('ArrowDown') || keys.has('KeyS') ? 1 : 0) - (keys.has('ArrowUp') || keys.has('KeyW') ? 1 : 0);
-    input.mx = clamp(kx + input.stickX, -1, 1);
-    input.my = clamp(ky + input.stickY, -1, 1);
-    stickEl.querySelector('.up').classList.toggle('on', input.my < -0.3);
-    stickEl.querySelector('.down').classList.toggle('on', input.my > 0.3);
-    stickEl.querySelector('.left').classList.toggle('on', input.mx < -0.3);
-    stickEl.querySelector('.right').classList.toggle('on', input.mx > 0.3);
+    input.mx = (keys.has('ArrowRight') || keys.has('KeyD') ? 1 : 0) - (keys.has('ArrowLeft') || keys.has('KeyA') ? 1 : 0);
+    input.my = (keys.has('ArrowDown') || keys.has('KeyS') ? 1 : 0) - (keys.has('ArrowUp') || keys.has('KeyW') ? 1 : 0);
   }
 
   const MOVE_KEYS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD'];
@@ -191,7 +190,7 @@
       if (e.code === 'Escape' && game && game.paused) resume();
       return;
     }
-    if (MOVE_KEYS.includes(e.code)) { keys.add(e.code); updateDirs(); e.preventDefault(); }
+    if (MOVE_KEYS.includes(e.code)) { keys.add(e.code); input.touch = null; updateDirs(); e.preventDefault(); }
     if (e.code === 'Space' || e.code === 'KeyZ' || e.code === 'Enter' || e.code === 'KeyX') {
       if (!e.repeat) input.a = true;
       e.preventDefault();
@@ -199,47 +198,37 @@
     if (e.code === 'Escape' || e.code === 'KeyP') pause();
   });
   window.addEventListener('keyup', e => { keys.delete(e.code); updateDirs(); });
-  window.addEventListener('blur', () => { keys.clear(); input.stickX = input.stickY = 0; updateDirs(); });
+  window.addEventListener('blur', () => { keys.clear(); input.touch = null; updateDirs(); });
 
-  let stickPointer = null;
-  function stickMove(e) {
-    const r = stickEl.getBoundingClientRect();
-    const dx = (e.clientX - (r.left + r.width / 2)) / (r.width / 2);
-    const dy = (e.clientY - (r.top + r.height / 2)) / (r.height / 2);
-    const dead = 0.25;
-    input.stickX = Math.abs(dx) > dead ? Math.sign(dx) : 0;
-    input.stickY = Math.abs(dy) > dead ? Math.sign(dy) : 0;
-    updateDirs();
+  let touchPointer = null;
+  function touchAt(e) {
+    const r = canvas.getBoundingClientRect();
+    input.touch = { x: (e.clientX - r.left) / r.width * W, y: (e.clientY - r.top) / r.height * H };
   }
-  stickEl.addEventListener('pointerdown', e => {
+  canvas.addEventListener('pointerdown', e => {
     ensureAudio();
-    stickPointer = e.pointerId;
-    stickEl.setPointerCapture(e.pointerId);
-    stickMove(e);
+    touchPointer = e.pointerId;
+    canvas.setPointerCapture(e.pointerId);
+    touchAt(e);
+    input.a = true;
     e.preventDefault();
   });
-  stickEl.addEventListener('pointermove', e => { if (e.pointerId === stickPointer) stickMove(e); });
-  const stickUp = e => {
-    if (e.pointerId !== stickPointer) return;
-    stickPointer = null; input.stickX = input.stickY = 0; updateDirs();
+  canvas.addEventListener('pointermove', e => { if (e.pointerId === touchPointer) touchAt(e); });
+  const touchEnd = e => {
+    if (e.pointerId !== touchPointer) return;
+    touchPointer = null; input.touch = null;
   };
-  stickEl.addEventListener('pointerup', stickUp);
-  stickEl.addEventListener('pointercancel', stickUp);
+  canvas.addEventListener('pointerup', touchEnd);
+  canvas.addEventListener('pointercancel', touchEnd);
 
-  btnA.addEventListener('pointerdown', e => {
-    ensureAudio();
-    input.a = true; btnA.classList.add('on');
-    e.preventDefault();
-  });
-  ['pointerup', 'pointercancel', 'pointerleave'].forEach(t => btnA.addEventListener(t, () => btnA.classList.remove('on')));
-  document.getElementById('btnMenu').addEventListener('click', () => (game && !game.paused && !overlay.classList.contains('show') ? pause() : null));
-  function refreshSoundBtn() { btnSound.classList.toggle('off', !soundOn); }
+  document.getElementById('btnPause').addEventListener('click', () => pause());
+  function refreshSoundBtn() { btnSound.textContent = soundOn ? '🔊' : '🔇'; }
   btnSound.addEventListener('click', () => {
     soundOn = !soundOn; ensureAudio(); refreshSoundBtn();
     try { localStorage.setItem('tennis-sound', soundOn ? 'on' : 'off'); } catch (e) { /* ignore */ }
   });
   refreshSoundBtn();
-  document.addEventListener('contextmenu', e => { if (e.target.closest('#controls, #stage')) e.preventDefault(); });
+  document.addEventListener('contextmenu', e => { if (e.target.closest('#stage')) e.preventDefault(); });
 
   // ---------- Game state ----------
   let game = null;
@@ -400,8 +389,10 @@
   function userShot(p) {
     const b = game.ball;
     const q = Math.min(1, Math.abs(b.x - p.x) / REACH_X); // 0 = perfect contact
-    const h = input.mx > 0.3 ? 1 : input.mx < -0.3 ? -1 : 0;
-    const deep = !(input.my > 0.3);
+    const opp = game.players[1 - p.side];
+    let h = input.mx > 0.3 ? 1 : input.mx < -0.3 ? -1 : 0;
+    if (!input.mx) h = Math.random() < 0.55 ? (opp.x < CX ? 1 : -1) : pick([-1, 0, 1]);
+    const deep = input.my > 0.3 ? false : Math.random() < 0.85;
     hitBall(p, {
       h, deep, speed: p.ch.shot * (deep ? 1 : 0.8), spread: 3 + q * 12,
       sharp: q < 0.4, error: q > 0.85 && Math.random() < 0.3,
@@ -502,7 +493,7 @@
         if (g.count > g.best) { g.best = g.count; saveBest(g.you.id, g.best); g.newBest = true; }
         showMsg(reason, `רצף: ${g.count}`);
         sfx.bad();
-        say(1, pick(CHARS.tal.lines.coach), 2600);
+        say(1, lineFor(CHARS.tal, 'win', g.you), 2600);
       } else {
         showMsg('נקודה!');
         sfx.good();
@@ -530,17 +521,17 @@
     // Trash talk
     const wp = g.players[winner], lp = g.players[1 - winner];
     if (g.over) {
-      say(1 - winner, lineFor(lp.ch, 'lose'), 2600);
+      say(1 - winner, lineFor(lp.ch, 'lose', wp.ch), 2600);
     } else if (Math.random() < 0.4) {
-      if (wp.ch.id === 'tal') say(winner, lineFor(wp.ch, 'win'));
+      if (wp.ch.id === 'tal') say(winner, lineFor(wp.ch, 'win', lp.ch));
       else if (lp.ch.id !== 'tal' && Math.random() < 0.6) say(1 - winner, lineFor(lp.ch, 'lose'));
       else if (wp.ch.lines.win) say(winner, lineFor(wp.ch, 'win'));
     }
     renderHud();
   }
 
-  function lineFor(ch, kind) {
-    if (ch.lines.coach) return pick(ch.lines.coach);
+  function lineFor(ch, kind, to) {
+    if (ch.lines.coach) return pick(to && to.female ? ch.lines.coachF : ch.lines.coach);
     return pick(ch.lines[kind]);
   }
 
@@ -560,9 +551,11 @@
 
     // Your movement (the server stands still until the serve)
     if (!(g.state === 'serve' && g.serverSide === 0)) {
-      movePlayer(you, input.mx * 10, input.my * 10, you.ch.speed);
+      if (input.mx || input.my) movePlayer(you, input.mx * 10, input.my * 10, you.ch.speed);
+      else if (input.touch) movePlayer(you, input.touch.x - you.x, input.touch.y - you.y, you.ch.speed);
+      else you.moving = false;
     } else you.moving = false;
-    if (aPressed && you.swing === 0 && g.state !== 'point') { you.swing = 16; you.swingHit = false; }
+    tipEl.hidden = !(g.state === 'serve' && g.serverSide === 0 && !you.isCpu);
 
     for (const p of g.players) {
       if (p.isCpu && !(g.state === 'serve' && g.serverSide === p.side)) cpuThink(p);
@@ -610,8 +603,8 @@
         if (g.state === 'rally') {
           for (const p of g.players) {
             if (!canReach(p, b)) continue;
-            if (p.isCpu) { cpuShot(p); break; }
-            if (p.swing > 3 && !p.swingHit) { userShot(p); break; }
+            if (p.isCpu) cpuShot(p); else userShot(p);
+            break;
           }
         }
       } else if (g.state === 'point') {
@@ -718,7 +711,7 @@
       return POINT_LABELS[me];
     };
     hud.innerHTML = [1, 0].map(i => `<div class="row${g.state === 'serve' && g.serverSide === i ? ' serving' : ''}">
-      <span class="nm">${g.players[i].ch.name}${i === 0 ? ' (את/ה)' : ''}</span>
+      <span class="nm">${g.players[i].ch.name}${i === 0 ? (g.you.female ? ' (את)' : ' (אתה)') : ''}</span>
       <span class="gm">משחקונים ${g.games[i]}</span><span class="pt">${lbl(i)}</span></div>`).join('');
   }
 
@@ -767,7 +760,7 @@
     showOverlay(`<h1>טניס<br>פיקסל</h1><div class="sub">משחק יחידים</div>
       <button data-act="train">אימון מול טל</button>
       <button data-act="match">משחק אמיתי</button>
-      <p class="small">זזים עם החצים, מכים עם A.<br>הכיוון שלוחצים ברגע המכה קובע לאן הכדור יטוס.<br>למטה ברגע המכה = כדור קצר.</p>`);
+      <p class="small">גוררים את האצבע על המגרש והשחקן רץ אליה.<br>המכה אוטומטית כשהכדור מגיע. נגיעה במסך = הגשה.<br>במחשב: גרירה עם העכבר או החצים, רווח להגשה.</p>`);
   }
 
   function showTrainPick() {
@@ -798,7 +791,7 @@
     showOverlay(`<h2>סוף סבב</h2>
       <div class="big">${g.count}</div>
       <p>${capHit ? 'זה המקסימום שלך מול טל!' : g.newBest ? 'שיא חדש!' : `השיא שלך: ${g.best}`}</p>
-      <div class="quote"><b>טל:</b> ${pick(CHARS.tal.lines.coach)}</div>
+      <div class="quote"><b>טל:</b> ${lineFor(CHARS.tal, 'win', g.you)}</div>
       <button data-act="again">עוד סבב</button>
       <button class="ghost" data-act="title">תפריט</button>`);
   }
@@ -809,8 +802,8 @@
     const wp = g.players[wSide].ch, lp = g.players[1 - wSide].ch;
     showOverlay(`<h2>${wp.name} ${won(wp, 'ניצח')}!</h2>
       <div class="big">${g.games[wSide]}–${g.games[1 - wSide]}</div>
-      <div class="quote"><b>${wp.name}:</b> ${lineFor(wp, 'win')}</div>
-      <div class="quote"><b>${lp.name}:</b> ${lineFor(lp, 'lose')}</div>
+      <div class="quote"><b>${wp.name}:</b> ${lineFor(wp, 'win', lp)}</div>
+      <div class="quote"><b>${lp.name}:</b> ${lineFor(lp, 'lose', wp)}</div>
       <button data-act="again">משחק חוזר</button>
       <button class="ghost" data-act="title">תפריט</button>`);
   }
