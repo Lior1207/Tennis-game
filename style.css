@@ -132,6 +132,8 @@ html, body {
   overflow-y: auto;
 }
 #overlay.show { display: flex; }
+#overlay.scene { background: transparent; align-items: flex-end; }
+#overlay.scene .menu { margin: 0; background: var(--lcd-3); border-top: 3px solid var(--lcd-0); }
 
 .menu {
   margin: auto;

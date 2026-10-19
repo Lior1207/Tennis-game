@@ -6,6 +6,7 @@
   const COURT = { x0: 35, x1: 125, y0: 30, y1: 210 };
   const G = 0.025, NET_H = 6, BOUNCE = 0.7, FRICTION = 0.82;
   const GAMES_TO_WIN = 3;
+  const WARMUP_GOAL = 10;
   const REACH_X = 14, REACH_Y = 10, REACH_Z = 22;
   const POINT_LABELS = ['0', '15', '30', '40'];
 
@@ -267,16 +268,18 @@
     bubble.hidden = true;
     setupServe();
     if (mode === 'train') say(1, 'יאללה, מתחילים!', 1600);
+    if (mode === 'warmup') say(1, 'יאללה, עד 10 ואז קפה קר!', 1800);
   }
 
   function setupServe() {
     const g = game;
-    const s = g.mode === 'train' ? 1 : g.server;
+    const coop = g.mode !== 'match'; // training & warm-up: the CPU always feeds
+    const s = coop ? 1 : g.server;
     const deuce = (g.pts[0] + g.pts[1]) % 2 === 0;
     const off = deuce ? 1 : -1;
     const [bottom, top] = g.players;
     for (const p of g.players) { p.swing = 0; p.swingHit = false; p.react = 0; }
-    if (g.mode === 'train') {
+    if (coop) {
       top.x = CX; top.y = 22; bottom.x = CX; bottom.y = 214;
     } else if (s === 0) {
       bottom.x = CX + off * 14; bottom.y = 218; top.x = CX - off * 24; top.y = 22;
@@ -301,15 +304,17 @@
   function mustFail(side) {
     const g = game;
     if (g.mode === 'train') return side === 0 && g.count >= g.cap;
+    if (g.mode === 'warmup') return false;
     return g.players[side].ch.id === g.loserId && wouldWinMatch(side);
   }
   // ...and the destined winner never gifts it away with an error.
   function mustBeIn(side) {
     const g = game;
-    if (g.mode === 'train') return side === 1;
+    if (g.mode !== 'match') return side === 1;
     return g.players[side].ch.id === g.winnerId && wouldWinMatch(1 - side);
   }
   function destinedWinnerCpu(p) {
+    if (game.mode === 'warmup') return p.isCpu; // the partner reaches everything
     return game.mode === 'train' ? p.ch.id === 'tal' : p.ch.id === game.winnerId;
   }
 
@@ -390,6 +395,15 @@
     const b = game.ball;
     const q = Math.min(1, Math.abs(b.x - p.x) / REACH_X); // 0 = perfect contact
     const opp = game.players[1 - p.side];
+    if (game.mode === 'warmup') {
+      // Cooperative rally: send it back to your partner
+      const miss = q > 0.85 && Math.random() < 0.3;
+      hitBall(p, {
+        feedX: miss ? (opp.x < CX ? rand(20, 30) : rand(130, 140)) : clamp(opp.x + rand(-10, 10) * (1 + q), 40, 120),
+        depth: rand(55, 80), speed: p.ch.shot * 0.8,
+      });
+      return;
+    }
     let h = input.mx > 0.3 ? 1 : input.mx < -0.3 ? -1 : 0;
     if (!input.mx) h = Math.random() < 0.55 ? (opp.x < CX ? 1 : -1) : pick([-1, 0, 1]);
     const deep = input.my > 0.3 ? false : Math.random() < 0.85;
@@ -401,8 +415,8 @@
 
   function cpuShot(p) {
     const g = game, opp = g.players[1 - p.side];
-    if (g.mode === 'train' && p.side === 1) {
-      const lvl = Math.min(1, g.count / 120);
+    if (g.mode !== 'match' && p.side === 1) {
+      const lvl = g.mode === 'train' ? Math.min(1, g.count / 120) : 0;
       hitBall(p, {
         feedX: clamp(opp.x + rand(-24 - lvl * 16, 24 + lvl * 16), 44, 116),
         depth: rand(52, 82), speed: 2.0 + lvl * 0.7,
@@ -486,6 +500,17 @@
     const b = g.ball;
     b.live = false;
 
+    if (g.mode === 'warmup') {
+      if (g.coffee) return;
+      const missed = g.players[1 - winner];
+      showMsg('אופס!', `${g.count} מסירות · מתחילים מחדש`);
+      sfx.bad();
+      if (Math.random() < 0.6) say(1 - winner, lineFor(missed.ch, 'lose'));
+      g.count = 0;
+      renderHud();
+      return;
+    }
+
     if (g.mode === 'train') {
       if (winner === 1) {
         g.trainOver = true;
@@ -539,6 +564,7 @@
     const g = game;
     hideMsg();
     if (g.mode === 'train' && g.trainOver) { showTrainResult(); return; }
+    if (g.mode === 'warmup' && g.coffee) { showCoffee(); return; }
     if (g.over) { showMatchResult(); return; }
     setupServe();
   }
@@ -593,6 +619,16 @@
             else {
               b.bounces = 1;
               if (g.mode === 'train' && b.hitter === 0) { g.count++; sfx.count(); renderHud(); }
+              if (g.mode === 'warmup') {
+                g.count++; sfx.count(); renderHud();
+                if (g.count >= WARMUP_GOAL) {
+                  // Done: let the ball die and head for iced coffee
+                  g.coffee = true;
+                  g.state = 'point'; g.timer = 110; b.live = false;
+                  showMsg('10!', 'הפסקת קפה קר');
+                  sfx.win();
+                }
+              }
             }
           } else endPoint(b.hitter, 'נקודה!');
         } else if (b.y < -8 || b.y > H + 8 || b.x < -8 || b.x > W + 8) {
@@ -680,7 +716,50 @@
     rect(x - 1, by, 1, 1, COL.ballDark); rect(x + 1, by + 2, 1, 1, COL.ballDark);
   }
 
+  // Zion, Tal and Lior sitting at a café table with iced coffees
+  function drawCoffee(t) {
+    rect(0, 0, W, H, '#9fd8f0');
+    rect(0, 150, W, H - 150, '#3f8f4c');
+    for (let y = 154; y < H; y += 8) rect(0, y, W, 4, '#3a8546');
+    // sun
+    rect(126, 14, 14, 14, '#ffe066'); rect(124, 17, 18, 8, '#ffe066'); rect(129, 12, 8, 18, '#ffe066');
+    // court fence in the distance
+    for (let x = 0; x < W; x += 6) rect(x, 120, 1, 30, '#5b6b5b');
+    rect(0, 120, W, 1, '#5b6b5b'); rect(0, 135, W, 1, '#5b6b5b');
+    // parasol
+    rect(79, 48, 2, 90, '#d9d9d9');
+    for (let i = 0; i < 12; i++) {
+      const y = 34 + i, half = 14 + i * 4;
+      for (let x = CX - half; x < CX + half; x++) {
+        rect(x, y, 1, 1, Math.floor((x - CX + 200) / 12) % 2 ? '#e84a4a' : '#ffffff');
+      }
+    }
+    rect(30, 46, 100, 2, '#b83232');
+    const seats = [['zion', 38], ['tal', 80], ['lior', 122]];
+    ctx.imageSmoothingEnabled = false;
+    seats.forEach(([id, x], i) => {
+      const bob = Math.sin(t / 300 + i * 2.1) > 0.6 ? -1 : 0; // laughing / chatting
+      rect(x - 12, 98, 24, 32, '#8a5a2b'); // chair back
+      rect(x - 10, 100, 20, 28, '#a46d36');
+      ctx.drawImage(SPRITES[id].front[0], 0, 0, 12, 12, x - 12, 106 + bob, 24, 24);
+    });
+    // table
+    rect(14, 128, 132, 6, '#c98b4b'); rect(14, 134, 132, 2, '#8a5a2b');
+    rect(24, 136, 4, 30, '#8a5a2b'); rect(132, 136, 4, 30, '#8a5a2b');
+    // iced coffees
+    seats.forEach(([, x], i) => {
+      const cx = x + 8;
+      rect(cx, 114, 8, 14, '#d8eef8');
+      rect(cx + 1, 118, 6, 9, '#8a5a2b');
+      rect(cx + 1, 118, 6, 2, '#c49a6c');
+      const ice = Math.sin(t / 400 + i) > 0 ? 0 : 1;
+      rect(cx + 1, 119 + ice, 2, 2, '#ffffff'); rect(cx + 4, 121 - ice, 2, 2, '#f0faff');
+      rect(cx + 5, 106, 1, 9, '#ff6fb1'); rect(cx + 5, 106, 3, 1, '#ff6fb1');
+    });
+  }
+
   function render() {
+    if (game && game.mode === 'warmup' && game.coffeeScene) { drawCoffee(performance.now()); return; }
     drawCourt();
     if (!game) { drawNet(); return; }
     const items = game.players.map(p => ({ y: p.y, draw: () => drawPlayer(p) }));
@@ -699,6 +778,11 @@
   function renderHud() {
     const g = game;
     if (!g) { hud.innerHTML = '<div class="center">טניס פיקסל · משחק יחידים</div>'; return; }
+    if (g.mode === 'warmup') {
+      hud.innerHTML = `<div class="row"><span class="nm">חימום: ציון וליאור</span></div>
+        <div class="row"><span class="nm">מסירות: ${g.count} / ${WARMUP_GOAL}</span></div>`;
+      return;
+    }
     if (g.mode === 'train') {
       hud.innerHTML = `<div class="row"><span class="nm">אימון: ${g.you.name} מול טל</span></div>
         <div class="row"><span class="nm">רצף: ${g.count}</span><span class="gm">שיא: ${g.best}</span></div>`;
@@ -736,13 +820,13 @@
   }
 
   // ---------- Menus ----------
-  function showOverlay(html) {
+  function showOverlay(html, cls = '') {
     overlay.innerHTML = `<div class="menu">${html}</div>`;
-    overlay.classList.add('show');
+    overlay.className = 'show ' + cls;
     const first = overlay.querySelector('button');
     if (first && matchMedia('(hover: hover)').matches) first.focus({ preventScroll: true });
   }
-  function hideOverlay() { overlay.classList.remove('show'); overlay.innerHTML = ''; }
+  function hideOverlay() { overlay.className = ''; overlay.innerHTML = ''; }
   function moveMenuFocus(dir) {
     const btns = [...overlay.querySelectorAll('button')];
     if (!btns.length) return;
@@ -758,9 +842,27 @@
     bubble.hidden = true; hideMsg();
     renderHud();
     showOverlay(`<h1>טניס<br>פיקסל</h1><div class="sub">משחק יחידים</div>
+      <button data-act="warmup">חימום: ציון וליאור</button>
       <button data-act="train">אימון מול טל</button>
       <button data-act="match">משחק אמיתי</button>
       <p class="small">גוררים את האצבע על המגרש והשחקן רץ אליה.<br>המכה אוטומטית כשהכדור מגיע. נגיעה במסך = הגשה.<br>במחשב: גרירה עם העכבר או החצים, רווח להגשה.</p>`);
+  }
+
+  function showWarmupPick() {
+    showOverlay(`<h2>חימום</h2><p>מתמסרים עד ${WARMUP_GOAL} בלי לפספס,<br>ואז יושבים לקפה קר עם טל.</p><p>את מי משחקים?</p>
+      ${card('zion', 'warm-go')}${card('lior', 'warm-go')}
+      <button class="ghost" data-act="title">חזרה</button>`);
+  }
+
+  function showCoffee() {
+    const g = game;
+    g.coffeeScene = true;
+    renderHud();
+    hud.innerHTML = '<div class="center">הפסקת קפה קר ☕</div>';
+    showOverlay(`<div class="quote"><b>ציון:</b> חייבת לי קפה</div>
+      <p><b>${WARMUP_GOAL} מסירות!</b> ציון, ליאור וטל יושבים לקפה קר.</p>
+      <button data-act="again">עוד חימום</button>
+      <button class="ghost" data-act="title">תפריט</button>`, 'scene');
   }
 
   function showTrainPick() {
@@ -826,6 +928,8 @@
     switch (act) {
       case 'title': showTitle(); break;
       case 'train': showTrainPick(); break;
+      case 'warmup': showWarmupPick(); break;
+      case 'warm-go': startGame('warmup', id, id === 'zion' ? 'lior' : 'zion'); break;
       case 'match': showMatchPick(); break;
       case 'train-go': startGame('train', id, 'tal'); break;
       case 'match-you': showOppPick(id); break;
