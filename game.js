@@ -343,6 +343,11 @@
       state: 'serve', timer: 0, rally: 0, count: 0,
       cap: you.trainCap || 999, strikes: 0, best: loadBest(youId),
       paused: false, over: false,
+      // whoever isn't playing watches from the right side and snacks on dates
+      spectator: {
+        ch: CHARS[Object.keys(CHARS).find(id => id !== youId && id !== oppId)],
+        x: W - 12, y: NET_Y + 14, eat: 0, untilDate: 3,
+      },
     };
     if (mode === 'match') {
       game.winnerId = you.rank > opp.rank ? you.id : opp.id;
@@ -584,6 +589,7 @@
     g.timer = 95;
     const b = g.ball;
     b.live = false;
+    spectatorTick();
 
     if (g.mode === 'warmup') {
       if (g.coffee) return;
@@ -668,12 +674,23 @@
     const g = game;
     const kinds = Object.keys(ANIMALS).filter(k => !g.animal || k !== g.lastAnimal);
     const kind = pick(kinds);
-    const left = Math.random() < 0.5;
-    const x = left ? 12 : W - 12, y = rand(70, 190);
+    const x = 12, y = rand(70, 190); // left side: the spectator stands on the right
     g.animal = { kind, x, y, t: 0, life: 200 };
     g.lastAnimal = kind;
     sfx.good();
     sayAt(ANIMALS[kind].name, `${pick(CHEERS)} ${g.count} נקודות!`, x, y - 34, false, 2600);
+  }
+
+  // Every few points the spectator eats a date
+  const EAT_FRAMES = 100;
+  function spectatorTick() {
+    const sp = game.spectator;
+    if (--sp.untilDate > 0 || sp.eat > 0) return;
+    sp.untilDate = 3 + Math.floor(Math.random() * 3);
+    sp.eat = EAT_FRAMES;
+    if (sp.ch.id === 'tal' && bubble.hidden && Math.random() < 0.5) {
+      sayAt(sp.ch.name, 'תמרים מעולים', sp.x, sp.y - 20, false, 1800);
+    }
   }
 
   // ---------- Update ----------
@@ -726,11 +743,11 @@
             else {
               b.bounces = 1;
               if (g.mode === 'train' && b.hitter === 0) {
-                g.count++; sfx.count(); renderHud();
+                g.count++; sfx.count(); renderHud(); spectatorTick();
                 if (g.count % 10 === 0) spawnAnimal();
               }
               if (g.mode === 'warmup') {
-                g.count++; sfx.count(); renderHud();
+                g.count++; sfx.count(); renderHud(); spectatorTick();
                 if (g.count % 3 === 0 && g.count < WARMUP_GOAL && Math.random() < 0.6) {
                   const p = pick(g.players);
                   say(p.side, lineFor(p.ch, 'chat', g.players[1 - p.side].ch));
@@ -764,6 +781,7 @@
     }
     for (const p of g.players) if (p.swing > 0) p.swing--;
     if (g.animal && ++g.animal.t > g.animal.life) g.animal = null;
+    if (g.spectator.eat > 0) g.spectator.eat--;
   }
 
   // ---------- Rendering ----------
@@ -876,6 +894,32 @@
     ctx.restore();
   }
 
+  function drawSpectator(sp) {
+    const sx = Math.round(sp.x - 6), sy = Math.round(sp.y - 16);
+    const t = EAT_FRAMES - sp.eat; // 0..EAT_FRAMES while eating
+    // shift weight from foot to foot while watching
+    const sway = sp.eat === 0 && Math.floor(performance.now() / 700) % 2 ? 1 : 0;
+    rect(sx + 2, sy + 15, 8, 2, COL.shadow);
+    ctx.drawImage(SPRITES[sp.ch.id].front[0], sx + sway, sy);
+    if (sp.eat > 0) {
+      const DATE = '#5a2d0c';
+      if (t < 25) {
+        // hand brings the date up from the waist to the mouth
+        const hy = Math.round(sy + 9 - (t / 25) * 4);
+        rect(sx + 1 + sway, hy, 1, 2, '#f8dcc8');
+        rect(sx + 2 + sway, hy - 1, 2, 3, DATE);
+      } else if (t < 50) {
+        // bite by bite
+        const left = 3 - Math.floor((t - 25) / 9);
+        rect(sx + 4 + sway, sy + 7, 1, 2, '#f8dcc8');
+        rect(sx + 5 + sway, sy + 5, 2, left, DATE);
+      } else if (t < 85) {
+        // chewing
+        if (Math.floor(t / 6) % 2) rect(sx + 5 + sway, sy + 5, 2, 1, '#8a3a2a');
+      }
+    }
+  }
+
   function drawAnimal(a) {
     const A = ANIMALS[a.kind];
     const cheering = Math.floor(a.t / 10) % 2 === 1;
@@ -902,6 +946,7 @@
     drawCourt();
     if (!game) { drawNet(); return; }
     if (game.animal) drawAnimal(game.animal);
+    if (!game.coffeeScene) drawSpectator(game.spectator);
     const items = game.players.map(p => ({ y: p.y, draw: () => drawPlayer(p) }));
     const b = game.ball;
     items.push({ y: b.y + 0.1, draw: () => drawBall(b) });
@@ -917,7 +962,7 @@
   // ---------- HUD / messages ----------
   function renderHud() {
     const g = game;
-    if (!g) { hud.innerHTML = '<div class="center">טניס עם הקפטנית</div>'; return; }
+    if (!g) { hud.innerHTML = '<div class="center">טניס מרחוק</div>'; return; }
     if (g.mode === 'warmup') {
       hud.innerHTML = `<div class="row"><span class="nm">חימום: ציון וליאור</span></div>
         <div class="row"><span class="nm">מסירות: ${g.count} / ${WARMUP_GOAL}</span></div>`;
@@ -986,7 +1031,7 @@
     game = null;
     bubble.hidden = true; hideMsg();
     renderHud();
-    showOverlay(`<h1>טניס עם<br>הקפטנית</h1><div class="sub">משחק יחידים</div>
+    showOverlay(`<h1>טניס<br>מרחוק</h1><div class="sub">משחק יחידים</div>
       <button data-act="warmup">חימום: ציון וליאור</button>
       <button data-act="train">אימון מול טל</button>
       <button data-act="match">משחק אמיתי</button>
