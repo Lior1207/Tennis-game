@@ -962,7 +962,7 @@
   // ---------- HUD / messages ----------
   function renderHud() {
     const g = game;
-    if (!g) { hud.innerHTML = '<div class="center">טניס מרחוק</div>'; return; }
+    if (!g) { hud.innerHTML = '<div class="center">Remote Tennis</div>'; return; }
     if (g.mode === 'warmup') {
       hud.innerHTML = `<div class="row"><span class="nm">חימום: ציון וליאור</span></div>
         <div class="row"><span class="nm">מסירות: ${g.count} / ${WARMUP_GOAL}</span></div>`;
@@ -1031,7 +1031,7 @@
     game = null;
     bubble.hidden = true; hideMsg();
     renderHud();
-    showOverlay(`<h1>טניס<br>מרחוק</h1><div class="sub">משחק יחידים</div>
+    showOverlay(`<h1>Remote<br>Tennis</h1><div class="sub">משחק יחידים</div>
       <button data-act="warmup">חימום: ציון וליאור</button>
       <button data-act="train">אימון מול טל</button>
       <button data-act="match">משחק אמיתי</button>
