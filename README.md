@@ -22,4 +22,4 @@
 - המכה אוטומטית ברגע שהכדור מגיע לשחקן. במקלדת אפשר לכוון עם החצים ברגע המכה.
 
 ## הרצה
-פותחים את `index.html` בדפדפן. המשחק מפורסם ב-Vercel בכתובת https://pixel-tennis-eta.vercel.app
+פותחים את `index.html` בדפדפן. המשחק מפורסם ב-Vercel בכתובת https://remotetennis.vercel.app
