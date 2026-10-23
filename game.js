@@ -333,8 +333,20 @@
     try { localStorage.setItem('tennis-best-' + id, String(v)); } catch (e) { /* ignore */ }
   }
 
+  // Usage analytics: each game event is reported to Vercel Web Analytics as a
+  // virtual page (e.g. /play/train/zion), so it shows up in the Pages panel.
+  function track(path) {
+    try { if (window.va) window.va('pageview', { path }); } catch (e) { /* ignore */ }
+  }
+  function trackEnd(path) {
+    if (game.endTracked) return; // report each game's result once
+    game.endTracked = true;
+    track(path);
+  }
+
   function startGame(mode, youId, oppId) {
     const you = CHARS[youId], opp = CHARS[oppId];
+    track(mode === 'match' ? `/play/match/${youId}-vs-${oppId}` : `/play/${mode}/${youId}`);
     game = {
       mode, you, opp,
       players: [mkPlayer(you, 0, false), mkPlayer(opp, 1, true)],
@@ -1048,6 +1060,7 @@
     const g = game;
     g.coffeeScene = true;
     bubble.hidden = true;
+    trackEnd(`/end/warmup/${g.you.id}/coffee`);
     renderHud();
     hud.innerHTML = `<div class="center">${WARMUP_GOAL} מסירות! הפסקת קפה קר ☕</div>`;
     showOverlay(`<div class="quote"><b>ציון:</b> חייבת לי קפה</div>
@@ -1082,6 +1095,8 @@
   function showTrainResult() {
     const g = game;
     const capHit = g.count >= g.cap;
+    const bucket = capHit ? 'max' : `${Math.floor(g.count / 10) * 10}-${Math.floor(g.count / 10) * 10 + 9}`;
+    trackEnd(`/end/train/${g.you.id}/${bucket}`);
     showOverlay(`<h2>סוף האימון</h2>
       <div class="big">${g.count}</div>
       <p>${capHit ? 'זה המקסימום שלך מול טל!' : g.newBest ? 'שיא חדש!' : `השיא שלך: ${g.best}`}</p>
@@ -1094,6 +1109,7 @@
     const g = game;
     const wSide = g.games[0] > g.games[1] ? 0 : 1;
     const wp = g.players[wSide].ch, lp = g.players[1 - wSide].ch;
+    trackEnd(`/end/match/${g.you.id}-vs-${g.opp.id}`);
     showOverlay(`<h2>${wp.name} ${won(wp, 'ניצח')}!</h2>
       <div class="big">${g.games[wSide]}–${g.games[1 - wSide]}</div>
       <div class="quote"><b>${wp.name}:</b> ${lineFor(wp, 'win', lp)}</div>
